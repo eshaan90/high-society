@@ -3,6 +3,11 @@ from collections import deque
 from datetime import datetime
 from users import Player
 import pandas as pd
+import matplotlib.pyplot as plt
+import cv2
+import os
+from helper import show_image
+
 """
 1. Initialize the game - Done
 2. Register players in the game - Done
@@ -53,31 +58,32 @@ class CircularLinkedList:
 class HighSocietyGame:
     MIN_PLAYERS=3
     MAX_PLAYERS=5
-    card_id_map={
-    "1":1,
-    "2":2,
-    "3":3,
-    "4":4,
-    "5":5,
-    "6":6,
-    "7":7,
-    "8":8,
-    "9":9,
-    "10":10,
-    "2x-a":11,
-    "2x-b":12,
-    "2x-c":13,
-    "minus-five":14,
-    "half":15,
-    "discard-one":16
+    card_display_map={
+    "1":(1,"Eau De Parfum",'eau_de_parfum.jpeg'),
+    "2":(2,"Champagne",'champagne.jpeg'),
+    "3":(3,"Haute Cuisine",'haute_cuisine.jpeg'),
+    "4":(4,"Casino",'casino.jpeg'),
+    "5":(5,"Couture",'couture.jpeg'),
+    "6":(6,'Vacances','vacances.jpeg'),
+    "7":(7,"Objet D'art","objet_d'art.jpeg"),
+    "8":(8,"Bijoux",'bijoux.jpeg'),
+    "9":(9,"Dressage",'dressage.jpeg'),
+    "10":(10,"Tourneé En Voilier",'tourneé_en_voilier.jpeg'),
+    "2x-a":(11,"Avant Garde",'avant_garde.jpeg'),
+    "2x-b":(12,"Joie de Vivre",'joie_de_vivre.jpeg'),
+    "2x-c":(13,"Bon Vivant",'bon_vivant.jpeg'),
+    "minus-five":(14,'Passé!','passé!.jpeg'),
+    "half":(15,'Scandale!','scandale!.jpeg'),
+    "discard-one":(16,"Faux Pas!",'faux_pas!.jpeg')
     }
-    card_display_map={}
 
+    CARD_TYPES=['luxury','prestige','disgrace']
     disgrace_cards=set(["minus-five","half","discard-one"])
     prestige_cards=set(["2x-a","2x-b","2x-c"])
     luxury_cards=set([*range(1,11)])
     colored_cards=prestige_cards
     colored_cards.add("half")
+    IMGS_PATH='imgs'
     
     def __init__(self,game_id:int,game_name:str="HighSociety",players=[]):
         self.game_id=game_id
@@ -85,7 +91,7 @@ class HighSocietyGame:
         self.players=players
         self.num_of_players=len(self.players)
         self.count_colored_cards=0
-        self.cards=set(self.card_id_map.keys())
+        self.cards=set(self.card_display_map.keys())
         self.current_highest_bid=0
         self.round_table=CircularLinkedList(None)
         self.inactive_players=set()
@@ -114,7 +120,9 @@ class HighSocietyGame:
             self.round_table=self.round_table.next
         self.round_table.next=self.dummy.next 
         self.round_table=self.round_table.next
-        print("Welcome to High Society! \nGame is ready to begin!\n")
+        print("Welcome to High Society! ")
+        self.show_card(figure=1,img_path='high-society.jpeg',window_name='High Society')
+        print("\nGame is ready to begin!\n")
 
     def update_hand_money(self,player:Player,money:int,card_type:str):
         """
@@ -126,7 +134,7 @@ class HighSocietyGame:
         Returs:
             returns: None
         """
-        if card_type=='disgrace':
+        if card_type==self.CARD_TYPES[2]:
             if money==0: #pass
                 for money in player.bid_money:
                     player.available_money.add(money)
@@ -159,10 +167,10 @@ class HighSocietyGame:
         Returns: 
             None
         """
-        if card_type=='luxury':
+        if card_type==self.CARD_TYPES[0]:
             player.luxury_score+=int(card)
             player.luxury_cards.add(card)
-        elif card_type=='prestige':
+        elif card_type==self.CARD_TYPES[1]:
             player.prestige_cards_count+=1
         else:
             player.disgrace_cards_count[card]+=1
@@ -236,6 +244,15 @@ class HighSocietyGame:
         
         return False #False for a bid, return True for a PASS 
     
+    def show_card(self,figure:int,img_path:str,window_name:str='High Society'):
+        """
+        Reads the image using open-CV
+        """
+        filepath=os.path.join(self.IMGS_PATH,img_path)
+        print(filepath)
+        img=cv2.imread(filepath)
+        show_image(figure,window_name,img)
+
     def pick_a_card(self):
         """
         Randomly picks a card and returns the card and its card type
@@ -245,6 +262,7 @@ class HighSocietyGame:
             open_card: str
             card_type: str
         """
+        key=str(input("\Press a key and ENTER to reveal a card: "))
         open_card=random.choice(list(self.cards))
         self.cards.remove(open_card)
         card_type=self.find_card_type(open_card)
@@ -259,10 +277,10 @@ class HighSocietyGame:
             str
         """
         if card in self.disgrace_cards:
-            return "disgrace"
+            return self.CARD_TYPES[2]
         elif card in self.prestige_cards:
-            return "prestige"
-        return "luxury"
+            return self.CARD_TYPES[1]
+        return self.CARD_TYPES[0]
     
     def check_end_of_game(self):
         """
@@ -277,7 +295,7 @@ class HighSocietyGame:
         self.update_hand_cards(player,card,card_type)
         self.compute_status(player)
 
-    def show_hands(self):
+    def show_game_status(self):
         """
         Shows the player's cards and its status during the game
         """
@@ -285,12 +303,20 @@ class HighSocietyGame:
         print(f"Number of cards available for Auction: {len(self.cards)+1}")
         print(f"Number of cards auctioned: {16-len(self.cards)-1}")
         print(f"Number of colored cards auctioned: {max(0,self.count_colored_cards-1)}\n")
-        node=self.dummy.next
+        # node=self.dummy.next
         info=[]
-        for i in range(self.num_of_players):
-            info.append([node.player.player_name,list(node.player.cards),node.player.status])
-            # print(f"\t {node.player}")
-            node=node.next
+        i=0
+        while i<self.num_of_players:
+            player=self.round_table.player
+            print(player.luxury_score,player.status)
+            info.append([player.player_name,list(player.cards),player.status])
+            self.round_table=self.round_table.next
+            i+=1
+        # for i in range(self.num_of_players):
+        #     print(node.player.status)
+            
+        #     # print(f"\t {node.player}")
+        #     node=node.next
         df=pd.DataFrame(data=info,columns=['Name','Cards','Current Status'])
         print(df)
 
@@ -330,13 +356,16 @@ class HighSocietyGame:
             open_card,card_type=self.pick_a_card()
             if open_card in self.colored_cards:
                 self.count_colored_cards+=1
+            self.show_card(figure=1,img_path=self.card_display_map[open_card][2],window_name='High Society')
+
             if not self.check_end_of_game():
                 self.current_highest_bid=0
                 self.inactive_players=set()
                 self.active_players=set([player.player_name for player in self.players])
+                
+                self.show_game_status()
+                print(f"\n\t\t\tNext up for Auction is {card_type} card: {open_card}")
 
-                print(f"\nNext up for Auction is {card_type} card: {open_card}")
-                self.show_hands()
                 if card_type=='disgrace':    #disgrace card; Auction process: bid money to avoid card, pass to save money and instead collect card
                     pass_flag=False
                     while not pass_flag:
@@ -347,7 +376,7 @@ class HighSocietyGame:
                             print(f"Current Highest Bid: {self.current_highest_bid}")
                             self.round_table=self.round_table.next
                         else:
-                            print(f"\nAuction Ended: {player.player_name} has Passed, he gets the card")
+                            print(f"\nAuction Ended: {player.player_name} has Passed, and gets the card")
                             print("-----------------X-----------------X---------------")
                             self.update_hand(player,open_card,card_type)
                             pass_flag=True
@@ -371,22 +400,29 @@ class HighSocietyGame:
                     
                     while self.round_table.player in self.inactive_players:
                         self.round_table=self.round_table.next
-                    player=self.round_table.player
-                    player.active_bid=0
-                    print(f"\nAuction Ended: {player.player_name} gets the card")
+                    winner=self.round_table.player
+                    winner.active_bid=0
+                    print(f"\nAuction Ended: {winner.player_name} gets the card")
                     print("-----------------X-----------------X---------------")
-                    self.update_hand(player,open_card,card_type)
+                    self.update_hand(winner,open_card,card_type)
+                
+                #End of auction: resolve money for each player 
                 i=0
                 while i<self.num_of_players:
                     self.round_table.player.active_bid=0
+                    # if card_type==self.CARD_TYPES[2]:
+                    self.round_table.player.bid_money=set()
+                    self.compute_status(self.round_table.player)
                     self.round_table=self.round_table.next
                     i+=1
+                
                 # self.round_table=self.round_table.next
             else:
                 end_game=True
 
         # score and declare winner
         print("\nEnd of Game\n")
+        cv2.destroyAllWindows()
         self.show_winner()
 
     def get_status(self, player):
@@ -402,7 +438,10 @@ class HighSocietyGame:
             minus_five=-5
         if player.disgrace_cards_count['half']==1:
             half=0.5
-        player.status=(2*player.prestige_cards_count)*(player.luxury_score+minus_five)*half
+        
+        player.status=(player.luxury_score+minus_five)*half
+        if player.prestige_cards_count:
+            player.status*=(2*player.prestige_cards_count)
 
 
     def get_player_order(self):
